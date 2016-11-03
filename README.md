@@ -2,5 +2,5 @@
 
 I'm trying things.
 
-webpack + uglifyjs
+webpack + uglifyjs  
 babel + webpack - JS ES6
