@@ -2,6 +2,8 @@ var m = {};
 
 window.onload = RockNRoll();
 
+var container;
+
 function RockNRoll() {
 	initGraphics();
 	initPhysicsWorld();
@@ -13,7 +15,6 @@ function RockNRoll() {
 function initGraphics() {
 	// Get the size of the inner window (content area)
 	// Reduce the canvas size a little bit to prevent scrolling the whole window
-	// content in Firefox while rotating the cube with the keys.
 	m.widthBorder = 10;
 	m.heightBorder = 20;
 
@@ -23,7 +24,8 @@ function initGraphics() {
 	m.renderer = new THREE.WebGLRenderer({ antialias: true });
 	m.renderer.setSize(canvasWidth, canvasHeight);
 	// Set the background color of the renderer to black, with full opacity
-	m.renderer.setClearColor(0x353538, 1);
+	// m.renderer.setClearColor(0x353538, 1);
+	m.renderer.setClearColor(0xffffff, 1);
 
 	document.body.appendChild(m.renderer.domElement);
 
@@ -68,11 +70,41 @@ function getRandomInt(min, max) {
 	return Math.floor(Math.random() * (max - min)) + min;
 }
 
-// function setBodiesPosition(bodies) {
-// 	for (i = 0; i < bodies.length; i++) {
-// 		bodies[i].setIdentity();
-// 	}
-// }
+function smoothToOrigin(delta, speed) {
+	for (i = 0; i < m.origins.length; i++) {
+		m.boxes[i].position.lerp(m.origins[i].position, delta * speed);
+		m.boxes[i].quaternion.slerp(m.origins[i].quaternion, delta * speed);
+	}
+}
+
+function setPhysicsToBoxes() {
+	m.bodies.length = m.boxes.length;
+	for (i = 0; i < m.boxes.length; i++) {
+		var pos = m.boxes[i].position;
+		var ori = m.boxes[i].quaternion;
+
+		var body = m.bodies[i];
+		m.scene.world.removeRigidBody(body);
+
+		var mass = 1 * 1 * 1; // Matches box dimensions for simplicity
+		var startTransform = new Ammo.btTransform();
+		startTransform.setIdentity();
+		startTransform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+		startTransform.setRotation(new Ammo.btQuaternion(ori.x, ori.y, ori.z, ori.w));
+
+		var localInertia = new Ammo.btVector3(0, 0, 0);
+
+		var boxShape = new Ammo.btBoxShape(new Ammo.btVector3(0.5, 0.5, 0.5)); // Box is 1x1x1
+		boxShape.calculateLocalInertia(mass, localInertia);
+
+		var motionState = new Ammo.btDefaultMotionState(startTransform);
+		var rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, boxShape, localInertia);
+		var boxAmmo = new Ammo.btRigidBody(rbInfo);
+		m.scene.world.addRigidBody(boxAmmo);
+
+		m.bodies[i] = boxAmmo;
+	}
+}
 
 function createScene() {
 	// graphics: plane
@@ -96,65 +128,84 @@ function createScene() {
 	m.scene.world.addRigidBody(groundAmmo);
 
 	// create boxes
+	m.sto = true; // smoothToOrigin toggle
+
 	var sideNum = 10;
+	var startPosRange = 75;
+	var startOriRange = Math.PI;
+	m.origins = [];
 	m.boxes = [];
 	m.bodies = [];
 	for (x = 0; x < sideNum; x++) {
 		for (y = 0; y < sideNum; y++) {
 			for (z = 0; z < sideNum; z++) {
 
+				// create a node for each cube to store its original position and orientation
+				var origin = new THREE.Object3D();
+				origin.position.set((x - sideNum / 2) * 1.5, y * 1.5 + 5, (z - sideNum / 2) * 1.5);
+				m.origins.push(origin);
+
 				// graphics
 				var randomColor = getRandomInt(0x050505, 0xffffff);
-				var material = new THREE.MeshPhongMaterial({ color: randomColor, specular: 0xffffff, shininess: 10, shading: THREE.FlatShading });
+				var material = new THREE.MeshPhongMaterial({ color: randomColor, specular: 0x2f2f2f, shininess: 10, transparent: true, opacity: 0.75, shading: THREE.FlatShading });
 				var box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
-				box.position.x = (x - sideNum / 2) * 1.5;
-				box.position.y = y * 1.5 + 5;
-				box.position.z = (z - sideNum / 2) * 1.5;
+				// box.position = origin.position;
+				box.position.x = getRandomInt(-startPosRange, startPosRange);
+				box.position.y = getRandomInt(-startPosRange, startPosRange);
+				box.position.z = getRandomInt(-startPosRange, startPosRange);
+				box.rotation.x = getRandomInt(-startOriRange, startOriRange);
+				box.rotation.y = getRandomInt(-startOriRange, startOriRange);
+				box.rotation.z = getRandomInt(-startOriRange, startOriRange);
 				m.boxes.push(box);
 				m.scene.add(box);
-
-				// physics
-				var mass = 1 * 1 * 1; // Matches box dimensions for simplicity
-				var startTransform = new Ammo.btTransform();
-				startTransform.setIdentity();
-				startTransform.setOrigin(new Ammo.btVector3(
-					(x - sideNum / 2) * 1.5,
-					y * 1.5 + 5,
-					(z - sideNum / 2) * 1.5)); // Set initial position
-
-				var localInertia = new Ammo.btVector3(0, 0, 0);
-
-				var boxShape = new Ammo.btBoxShape(new Ammo.btVector3(0.5, 0.5, 0.5)); // Box is 1x1x1
-				boxShape.calculateLocalInertia(mass, localInertia);
-
-				var motionState = new Ammo.btDefaultMotionState(startTransform);
-				var rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, boxShape, localInertia);
-				var boxAmmo = new Ammo.btRigidBody(rbInfo);
-				m.scene.world.addRigidBody(boxAmmo);
-				m.bodies.push(boxAmmo); // Keep track of this box
 			}
 		}
 	}
+	setPhysicsToBoxes();
 
 	// move camera
-	m.camera.position.set(0, 12, 25);
-	m.camera.lookAt(new THREE.Vector3(0, 0, 0));
+	m.camera.position.set(0, 17, 25);
+	m.camera.lookAt(new THREE.Vector3(0, 5, 0));
+
+	// stats
+	container = document.createElement('div');
+	document.body.appendChild(container);
+
+	m.stats = new Stats();
+	container.appendChild(m.stats.dom);
+
+	// help
+	var info = document.createElement('div');
+	info.style.position = 'absolute';
+	info.style.top = '10px';
+	info.style.width = '100%';
+	info.style.textAlign = 'center';
+	info.innerHTML = 'Space: toggle group / physicalize objects';
+	container.appendChild(info);
 }
 
 function animate(delta) {
-	// update physics
-	m.scene.world.stepSimulation(delta * 1.50, 5);
+	if (m.sto) {
+		smoothToOrigin(delta, 1.5);
+	} else {
+		// update physics
+		m.scene.world.stepSimulation(delta * 1.50, 5);
 
-	var transform = new Ammo.btTransform();
-	var origin, rotation;
-	for (i = 0; i < m.bodies.length; i++) {
-		m.bodies[i].getMotionState().getWorldTransform(transform);
-		origin = transform.getOrigin();
-		rotation = transform.getRotation();
+		var transform = new Ammo.btTransform();
+		var origin, rotation;
+		for (i = 0; i < m.bodies.length; i++) {
+			m.bodies[i].getMotionState().getWorldTransform(transform);
+			origin = transform.getOrigin();
+			rotation = transform.getRotation();
 
-		var box = m.boxes[i];
-		box.position.set(origin.x(), origin.y(), origin.z());
-		box.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+			if (origin.y() < -100) {
+				m.bodies[i].setActivationState(0);
+			}
+
+			var box = m.boxes[i];
+			box.position.set(origin.x(), origin.y(), origin.z());
+			box.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+		}
 	}
 }
 
@@ -168,27 +219,30 @@ function onDocumentKeyDown(event) {
 
 	m.keys[event.keyCode] = true;
 	switch (event.keyCode) {
-		case 82: // 'r'
-			// setBodiesPosition(m.bodies);
-			break;
-
 		case 32: // space
-		 	for (i = 0; i < m.bodies.length; i++) {
-				// make sure the body is awake
-				m.bodies[i].activate();
-				// setLineageVelocity / applyForce / applyImpulse
-				m.bodies[i].applyImpulse(new Ammo.btVector3(0, 10, 0));
+			m.sto = !m.sto;
+			if (m.sto === false) {
+				setPhysicsToBoxes();
 			}
 			break;
 
-		case 38: // up
-			for (i = 0; i < m.bodies.length; i++) {
-				// make sure the body is awake
-				m.bodies[i].activate();
-				// setLineageVelocity / applyForce / applyImpulse
-				m.bodies[i].applyImpulse(new Ammo.btVector3(getRandomInt(-15, 15), getRandomInt(0, 15), getRandomInt(-15, 15)));
-			}
-			break;
+		// case 82: // 'r'
+		//  	for (i = 0; i < m.bodies.length; i++) {
+		// 		// make sure the body is awake
+		// 		m.bodies[i].activate();
+		// 		// setLineageVelocity / applyForce / applyImpulse
+		// 		m.bodies[i].applyImpulse(new Ammo.btVector3(0, 10, 0));
+		// 	}
+		// 	break;
+
+		// case 38: // up
+		// 	for (i = 0; i < m.bodies.length; i++) {
+		// 		// make sure the body is awake
+		// 		m.bodies[i].activate();
+		// 		// setLineageVelocity / applyForce / applyImpulse
+		// 		m.bodies[i].applyImpulse(new Ammo.btVector3(getRandomInt(-15, 15), getRandomInt(0, 15), getRandomInt(-15, 15)));
+		// 	}
+		// 	break;
 	}
 }
 
@@ -219,8 +273,12 @@ function render() {
 	// hence not wasting their precious processing power and battery life.
 	requestAnimationFrame(render);
 
+	m.stats.begin();
+
 	var delta = m.clock.getDelta();
 	animate(delta);
 
 	m.renderer.render(m.scene, m.camera);
+
+	m.stats.end();
 }
