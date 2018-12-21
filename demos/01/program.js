@@ -1,79 +1,8 @@
 var m = {};
-var container;
-
-class CPhysicsBox {
-
-	constructor(v, q, size = 1.0) {
-		this.origin = {};
-		this.smoothToOrigin = false;
-		this.setOrigin(v, q);
-		this._size = size;
-
-		// graphics, we don't care about the mesh transforms; it will be updated through its physical body
-		var randomColor = getRandomInt(0x050505, 0xffffff);
-		var material = new THREE.MeshPhongMaterial({ color: randomColor, specular: 0x2f2f2f, shininess: 10, transparent: true, opacity: 0.75, shading: THREE.FlatShading });
-		this.mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), material);
-
-		// physics
-		this.body = {};
-		this.setTransform(v, new THREE.Quaternion());
-	}
-
-	setOrigin(v, q = new THREE.Quaternion()) {
-		this.origin.v = v;
-		this.origin.q = q;
-	}
-
-	// cannot directly "teleport" the physics object: remove it from physics world and recreate it at the new position
-	setTransform(v, q) {
-		m.scene.world.removeRigidBody(this.body);
-
-		var mass = this._size * this._size * this._size;
-		var startTransform = new Ammo.btTransform();
-		startTransform.setIdentity();
-		startTransform.setOrigin(new Ammo.btVector3(v.x, v.y, v.z));
-		startTransform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
-
-		var localInertia = new Ammo.btVector3(0, 0, 0);
-
-		var boxShape = new Ammo.btBoxShape(new Ammo.btVector3(this._size / 2.0, this._size / 2.0, this._size / 2.0));
-		boxShape.calculateLocalInertia(mass, localInertia);
-
-		var motionState = new Ammo.btDefaultMotionState(startTransform);
-		var rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, boxShape, localInertia);
-		this.body = new Ammo.btRigidBody(rbInfo);
-
-		m.scene.world.addRigidBody(this.body);
-	}
-
-	toggleSmoothToOrigin() {
-		this.smoothToOrigin = !this.smoothToOrigin;
-		if (this.smoothToOrigin === false) {
-			this.setTransform(this.mesh.position, this.mesh.quaternion);
-		}
-	}
-
-	update(delta = 0, speed = 0) {
-		// we don't smooth to origin, update the mesh to its physical body position and orientation
-		if (!this.smoothToOrigin) {
-			var transform = new Ammo.btTransform();
-			this.body.getMotionState().getWorldTransform(transform);
-
-			var origin = transform.getOrigin();
-			var rotation = transform.getRotation();
-			this.mesh.position.set(origin.x(), origin.y(), origin.z());
-			this.mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
-		}
-
-		//
-		else {
-			this.mesh.position.lerp(this.origin.v, delta * speed);
-			this.mesh.quaternion.slerp(this.origin.q, delta * speed);
-		}
-	}
-}
 
 window.onload = RockNRoll();
+
+var container;
 
 function RockNRoll() {
 	initGraphics();
@@ -141,6 +70,42 @@ function getRandomInt(min, max) {
 	return Math.floor(Math.random() * (max - min)) + min;
 }
 
+function smoothToOrigin(delta, speed) {
+	for (i = 0; i < m.origins.length; i++) {
+		m.boxes[i].position.lerp(m.origins[i].position, delta * speed);
+		m.boxes[i].quaternion.slerp(m.origins[i].quaternion, delta * speed);
+	}
+}
+
+function setPhysicsToBoxes() {
+	m.bodies.length = m.boxes.length;
+	for (i = 0; i < m.boxes.length; i++) {
+		var pos = m.boxes[i].position;
+		var ori = m.boxes[i].quaternion;
+
+		var body = m.bodies[i];
+		m.scene.world.removeRigidBody(body);
+
+		var mass = 1 * 1 * 1; // Matches box dimensions for simplicity
+		var startTransform = new Ammo.btTransform();
+		startTransform.setIdentity();
+		startTransform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+		startTransform.setRotation(new Ammo.btQuaternion(ori.x, ori.y, ori.z, ori.w));
+
+		var localInertia = new Ammo.btVector3(0, 0, 0);
+
+		var boxShape = new Ammo.btBoxShape(new Ammo.btVector3(0.5, 0.5, 0.5)); // Box is 1x1x1
+		boxShape.calculateLocalInertia(mass, localInertia);
+
+		var motionState = new Ammo.btDefaultMotionState(startTransform);
+		var rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, boxShape, localInertia);
+		var boxAmmo = new Ammo.btRigidBody(rbInfo);
+		m.scene.world.addRigidBody(boxAmmo);
+
+		m.bodies[i] = boxAmmo;
+	}
+}
+
 function createScene() {
 	// graphics: plane
 	var geometry = new THREE.PlaneGeometry(25, 25, 25, 25);
@@ -163,35 +128,40 @@ function createScene() {
 	m.scene.world.addRigidBody(groundAmmo);
 
 	// create boxes
+	m.sto = true; // smoothToOrigin toggle
+
 	var sideNum = 10;
 	var startPosRange = 75;
 	var startOriRange = Math.PI;
+	m.origins = [];
 	m.boxes = [];
+	m.bodies = [];
 	for (x = 0; x < sideNum; x++) {
 		for (y = 0; y < sideNum; y++) {
 			for (z = 0; z < sideNum; z++) {
 
-				// original box position
-				var physicsbox = new CPhysicsBox(new THREE.Vector3((x - sideNum / 2) * 1.5, y * 1.5 + 5, (z - sideNum / 2) * 1.5), new THREE.Quaternion());
+				// create a node for each cube to store its original position and orientation
+				var origin = new THREE.Object3D();
+				origin.position.set((x - sideNum / 2) * 1.5, y * 1.5 + 5, (z - sideNum / 2) * 1.5);
+				m.origins.push(origin);
 
-				// move the box to a random position and orientation
-				physicsbox.mesh.position.set(
-					getRandomInt(-startPosRange, startPosRange),
-					getRandomInt(-startPosRange, startPosRange),
-					getRandomInt(-startPosRange, startPosRange));
-
-				physicsbox.mesh.quaternion.setFromEuler(new THREE.Euler(
-					getRandomInt(-startOriRange, startOriRange),
-					getRandomInt(-startOriRange, startOriRange),
-					getRandomInt(-startOriRange, startOriRange), 'XYZ'));
-
-				physicsbox.toggleSmoothToOrigin();
-
-				m.boxes.push(physicsbox);
-				m.scene.add(physicsbox.mesh);
+				// graphics
+				var randomColor = getRandomInt(0x050505, 0xffffff);
+				var material = new THREE.MeshPhongMaterial({ color: randomColor, specular: 0x2f2f2f, shininess: 10, transparent: true, opacity: 0.75, shading: THREE.FlatShading });
+				var box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+				// box.position = origin.position;
+				box.position.x = getRandomInt(-startPosRange, startPosRange);
+				box.position.y = getRandomInt(-startPosRange, startPosRange);
+				box.position.z = getRandomInt(-startPosRange, startPosRange);
+				box.rotation.x = getRandomInt(-startOriRange, startOriRange);
+				box.rotation.y = getRandomInt(-startOriRange, startOriRange);
+				box.rotation.z = getRandomInt(-startOriRange, startOriRange);
+				m.boxes.push(box);
+				m.scene.add(box);
 			}
 		}
 	}
+	setPhysicsToBoxes();
 
 	// move camera
 	m.camera.position.set(0, 17, 25);
@@ -204,7 +174,7 @@ function createScene() {
 	m.stats = new Stats();
 	container.appendChild(m.stats.dom);
 
-	// display some help
+	// help
 	var info = document.createElement('div');
 	info.style.position = 'absolute';
 	info.style.top = '10px';
@@ -215,18 +185,28 @@ function createScene() {
 }
 
 function animate(delta) {
-	// update physics when not smoothing boxes
-	if (!m.sto) {
-		m.scene.world.stepSimulation(delta * 1.5, 5);
-	}
-	for (i = 0; i < m.boxes.length; i++) {
-		m.boxes[i].update(delta, 1.5);
-	}
+	if (m.sto) {
+		smoothToOrigin(delta, 1.5);
+	} else {
+		// update physics
+		m.scene.world.stepSimulation(delta * 1.50, 5);
 
-	// NOT A FUNCTION? DAFUQ?!
-	// for (box in m.boxes) {
-	// 	box.update(delta, 1.5);
-	// }
+		var transform = new Ammo.btTransform();
+		var origin, rotation;
+		for (i = 0; i < m.bodies.length; i++) {
+			m.bodies[i].getMotionState().getWorldTransform(transform);
+			origin = transform.getOrigin();
+			rotation = transform.getRotation();
+
+			if (origin.y() < -100) {
+				m.bodies[i].setActivationState(0);
+			}
+
+			var box = m.boxes[i];
+			box.position.set(origin.x(), origin.y(), origin.z());
+			box.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+		}
+	}
 }
 
 function onDocumentKeyDown(event) {
@@ -237,19 +217,32 @@ function onDocumentKeyDown(event) {
 
 	console.log("keydown " + event.keyCode);
 
-	// to body: setLinearVelocity / applyForce / applyImpulse
-
 	m.keys[event.keyCode] = true;
 	switch (event.keyCode) {
 		case 32: // space
-			for (i = 0; i < m.boxes.length; i++) {
-				m.boxes[i].toggleSmoothToOrigin();
+			m.sto = !m.sto;
+			if (m.sto === false) {
+				setPhysicsToBoxes();
 			}
-			// NOT A FUNCTION? DAFUQ?!
-			// for (box in m.boxes) {
-			// 	box.toggleSmoothToOrigin();
-			// }
 			break;
+
+		// case 82: // 'r'
+		//  	for (i = 0; i < m.bodies.length; i++) {
+		// 		// make sure the body is awake
+		// 		m.bodies[i].activate();
+		// 		// setLineageVelocity / applyForce / applyImpulse
+		// 		m.bodies[i].applyImpulse(new Ammo.btVector3(0, 10, 0));
+		// 	}
+		// 	break;
+
+		// case 38: // up
+		// 	for (i = 0; i < m.bodies.length; i++) {
+		// 		// make sure the body is awake
+		// 		m.bodies[i].activate();
+		// 		// setLineageVelocity / applyForce / applyImpulse
+		// 		m.bodies[i].applyImpulse(new Ammo.btVector3(getRandomInt(-15, 15), getRandomInt(0, 15), getRandomInt(-15, 15)));
+		// 	}
+		// 	break;
 	}
 }
 
