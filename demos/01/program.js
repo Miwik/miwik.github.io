@@ -1,11 +1,3 @@
-// BUGS:
-// - ERROR after some time:
-//   Cannot enlarge memory arrays. Either
-//   (1) compile with  -s TOTAL_MEMORY=X  with X higher than the current value 67108864,
-//   (2) compile with  -s ALLOW_MEMORY_GROWTH=1  which adjusts the size at runtime but prevents some optimizations,
-//   (3) set Module.TOTAL_MEMORY to a higher value before the program runs, or if you want malloc to
-//   return NULL (0) instead of this abort, compile with  -s ABORTING_MALLOC=0
-
 var m = {};
 var container;
 
@@ -23,6 +15,7 @@ class CPhysicsBox {
 		this.mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), material);
 
 		// physics
+		this.body = {};
 		this.setTransform(v, new THREE.Quaternion());
 	}
 
@@ -34,7 +27,6 @@ class CPhysicsBox {
 	// cannot directly "teleport" the physics object: remove it from physics world and recreate it at the new position
 	setTransform(v, q) {
 		m.scene.world.removeRigidBody(this.body);
-		this.body = {}; // delete? body, is it necessary?
 
 		var mass = this._size * this._size * this._size;
 		var startTransform = new Ammo.btTransform();
@@ -68,17 +60,12 @@ class CPhysicsBox {
 			this.body.getMotionState().getWorldTransform(transform);
 
 			var origin = transform.getOrigin();
-			// limit fall
-			if (origin.y() < -200) {
-				this.body.setActivationState(0);
-			}
 			var rotation = transform.getRotation();
 			this.mesh.position.set(origin.x(), origin.y(), origin.z());
 			this.mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
 		}
 
-		// smooth mesh position and orientation to origin, don't touch the physical body, it will be set to the
-		// mesh position when smooth it toggled off
+		//
 		else {
 			this.mesh.position.lerp(this.origin.v, delta * speed);
 			this.mesh.quaternion.slerp(this.origin.q, delta * speed);
@@ -183,6 +170,7 @@ function createScene() {
 	for (x = 0; x < sideNum; x++) {
 		for (y = 0; y < sideNum; y++) {
 			for (z = 0; z < sideNum; z++) {
+
 				// original box position
 				var physicsbox = new CPhysicsBox(new THREE.Vector3((x - sideNum / 2) * 1.5, y * 1.5 + 5, (z - sideNum / 2) * 1.5), new THREE.Quaternion());
 
@@ -231,22 +219,14 @@ function animate(delta) {
 	if (!m.sto) {
 		m.scene.world.stepSimulation(delta * 1.5, 5);
 	}
+	for (i = 0; i < m.boxes.length; i++) {
+		m.boxes[i].update(delta, 1.5);
+	}
 
 	// NOT A FUNCTION? DAFUQ?!
-	//
 	// for (box in m.boxes) {
 	// 	box.update(delta, 1.5);
 	// }
-
-	// WORKING but could be smaller
-	//
-	// for (i = 0; i < m.boxes.length; i++) {
-	// 	m.boxes[i].update(delta, 1.5);
-	// }
-
-	// OK super intuitive and readable foreach...
-	//
-	m.boxes.forEach(function(box) { box.update(delta, 1.5 ); });
 }
 
 function onDocumentKeyDown(event) {
@@ -258,18 +238,27 @@ function onDocumentKeyDown(event) {
 	console.log("keydown " + event.keyCode);
 
 	// to body: setLinearVelocity / applyForce / applyImpulse
+
 	m.keys[event.keyCode] = true;
 	switch (event.keyCode) {
-		// space key
-		case 32:
-			m.boxes.forEach(function(box) { box.toggleSmoothToOrigin(); });
+		case 32: // space
+			for (i = 0; i < m.boxes.length; i++) {
+				m.boxes[i].toggleSmoothToOrigin();
+			}
+			// NOT A FUNCTION? DAFUQ?!
+			// for (box in m.boxes) {
+			// 	box.toggleSmoothToOrigin();
+			// }
 			break;
 	}
 }
 
 function onDocumentKeyUp(event) {
 	console.log("keyup" + event.keyCode);
+
 	m.keys[event.keyCode] = false;
+	switch (event.keyCode) {
+	}
 }
 
 function onWindowResize() {
@@ -292,8 +281,11 @@ function render() {
 	requestAnimationFrame(render);
 
 	m.stats.begin();
+
 	var delta = m.clock.getDelta();
 	animate(delta);
+
 	m.renderer.render(m.scene, m.camera);
+
 	m.stats.end();
 }
