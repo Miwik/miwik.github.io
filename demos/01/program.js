@@ -130,7 +130,7 @@ function createScene() {
 	// create boxes
 	m.sto = true; // smoothToOrigin toggle
 
-	var sideNum = 10;
+	var sideNum = 9;
 	var startPosRange = 75;
 	var startOriRange = Math.PI;
 	m.origins = [];
@@ -198,7 +198,7 @@ function animate(delta) {
 			origin = transform.getOrigin();
 			rotation = transform.getRotation();
 
-			if (origin.y() < -100) {
+			if (origin.y() < -200) {
 				m.bodies[i].setActivationState(0);
 			}
 
