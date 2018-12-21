@@ -18,9 +18,8 @@ class CPhysicsBox {
     this._size = size;
 
     // graphics, we don't care about the mesh transforms; it will be updated through its physical body
-    const randomColor = getRandomInt(0x050505, 0xffffff);
-    // var material = new THREE.MeshPhongMaterial({ color: randomColor, specular: 0x2f2f2f, shininess: 10 });
-    const material = new THREE.MeshPhongMaterial({ color: randomColor, specular: 0x2f2f2f, shininess: 10, transparent: true, opacity: 0.75, shading: THREE.FlatShading });
+    var randomColor = getRandomInt(0x050505, 0xffffff);
+    var material = new THREE.MeshPhongMaterial({ color: randomColor, specular: 0x2f2f2f, shininess: 10, transparent: true, opacity: 0.75, shading: THREE.FlatShading });
     this.mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), material);
 
     // physics
@@ -37,19 +36,19 @@ class CPhysicsBox {
     m.scene.world.removeRigidBody(this.body);
     this.body = {}; // delete? body, is it necessary?
 
-    const mass = this._size * this._size * this._size;
-    const startTransform = new Ammo.btTransform();
+    var mass = this._size * this._size * this._size;
+    var startTransform = new Ammo.btTransform();
     startTransform.setIdentity();
     startTransform.setOrigin(new Ammo.btVector3(v.x, v.y, v.z));
     startTransform.setRotation(new Ammo.btQuaternion(q.x, q.y, q.z, q.w));
 
-    const localInertia = new Ammo.btVector3(0, 0, 0);
+    var localInertia = new Ammo.btVector3(0, 0, 0);
 
-    const boxShape = new Ammo.btBoxShape(new Ammo.btVector3(this._size / 2.0, this._size / 2.0, this._size / 2.0));
+    var boxShape = new Ammo.btBoxShape(new Ammo.btVector3(this._size / 2.0, this._size / 2.0, this._size / 2.0));
     boxShape.calculateLocalInertia(mass, localInertia);
 
-    const motionState = new Ammo.btDefaultMotionState(startTransform);
-    const rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, boxShape, localInertia);
+    var motionState = new Ammo.btDefaultMotionState(startTransform);
+    var rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, boxShape, localInertia);
     this.body = new Ammo.btRigidBody(rbInfo);
 
     m.scene.world.addRigidBody(this.body);
@@ -57,9 +56,7 @@ class CPhysicsBox {
 
   toggleSmoothToOrigin() {
     this.smoothToOrigin = !this.smoothToOrigin;
-    if (this.smoothToOrigin) {
-      this.body.setActivationState(0);
-    } else {
+    if (this.smoothToOrigin === false) {
       this.setTransform(this.mesh.position, this.mesh.quaternion);
     }
   }
@@ -67,15 +64,15 @@ class CPhysicsBox {
   update(delta = 0, speed = 0) {
     // we don't smooth to origin, update the mesh to its physical body position and orientation
     if (!this.smoothToOrigin) {
-      const transform = new Ammo.btTransform();
+      var transform = new Ammo.btTransform();
       this.body.getMotionState().getWorldTransform(transform);
 
-      const origin = transform.getOrigin();
+      var origin = transform.getOrigin();
       // limit fall
       if (origin.y() < -200) {
         this.body.setActivationState(0);
       }
-      const rotation = transform.getRotation();
+      var rotation = transform.getRotation();
       this.mesh.position.set(origin.x(), origin.y(), origin.z());
       this.mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
     }
@@ -105,12 +102,13 @@ function initGraphics() {
   m.widthBorder = 10;
   m.heightBorder = 20;
 
-  const canvasWidth = window.innerWidth - m.widthBorder;
-  const canvasHeight = window.innerHeight - m.heightBorder;
+  var canvasWidth = window.innerWidth - m.widthBorder;
+  var canvasHeight = window.innerHeight - m.heightBorder;
 
   m.renderer = new THREE.WebGLRenderer({ antialias: true });
   m.renderer.setSize(canvasWidth, canvasHeight);
-  // Set the background color
+  // Set the background color of the renderer to black, with full opacity
+  // m.renderer.setClearColor(0x353538, 1);
   m.renderer.setClearColor(0xffffff, 1);
 
   document.body.appendChild(m.renderer.domElement);
@@ -121,10 +119,10 @@ function initGraphics() {
   m.camera = new THREE.PerspectiveCamera(75, canvasWidth / canvasHeight, 0.1, 1000);
 
   // lights
-  const ambient = new THREE.AmbientLight(0x404040); // soft white light
+  var ambient = new THREE.AmbientLight(0x404040); // soft white light
   m.scene.add(ambient);
 
-  const light = new THREE.DirectionalLight(0xffffff, 1); // default white light
+  var light = new THREE.DirectionalLight(0xffffff, 1); // default white light
   light.position.set(0, 1, 1);
   m.scene.add(light);
 
@@ -142,10 +140,10 @@ function initGraphics() {
 }
 
 function initPhysicsWorld() {
-  const collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
-  const dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);
-  const overlappingPairCache = new Ammo.btDbvtBroadphase();
-  const solver = new Ammo.btSequentialImpulseConstraintSolver();
+  var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
+  var dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);
+  var overlappingPairCache = new Ammo.btDbvtBroadphase();
+  var solver = new Ammo.btSequentialImpulseConstraintSolver();
   m.scene.world = new Ammo.btDiscreteDynamicsWorld(dispatcher, overlappingPairCache, solver, collisionConfiguration);
   m.scene.world.setGravity(new Ammo.btVector3(0, -12, 0));
 }
@@ -158,40 +156,35 @@ function getRandomInt(min, max) {
 
 function createScene() {
   // graphics: plane
-  const geometry = new THREE.PlaneGeometry(25, 25, 25, 25);
-  const material = new THREE.MeshBasicMaterial({ color: 0x101010, side: THREE.DoubleSide, wireframe: true });
+  var geometry = new THREE.PlaneGeometry(25, 25, 25, 25);
+  var material = new THREE.MeshBasicMaterial({ color: 0x101010, side: THREE.DoubleSide, wireframe: true });
   m.plane = new THREE.Mesh(geometry, material);
   m.plane.rotation.x = THREE.Math.degToRad(90);
   m.scene.add(m.plane);
 
   // physics: plane - ground
-  const groundShape = new Ammo.btBoxShape(new Ammo.btVector3(12.5, 1, 12.5)); // Create block 50x2x50
-  const groundTransform = new Ammo.btTransform();
+  var groundShape = new Ammo.btBoxShape(new Ammo.btVector3(12.5, 1, 12.5)); // Create block 50x2x50
+  var groundTransform = new Ammo.btTransform();
   groundTransform.setIdentity();
   groundTransform.setOrigin(new Ammo.btVector3(0, -1, 0)); // Set initial position
 
-  const groundMass = 0; // Mass of 0 means ground won't move from gravity or collisions
-  const localInertia = new Ammo.btVector3(0, 0, 0);
-  const motionState = new Ammo.btDefaultMotionState(groundTransform);
-  const rbInfo = new Ammo.btRigidBodyConstructionInfo(groundMass, motionState, groundShape, localInertia);
-  const groundAmmo = new Ammo.btRigidBody(rbInfo);
+  var groundMass = 0; // Mass of 0 means ground won't move from gravity or collisions
+  var localInertia = new Ammo.btVector3(0, 0, 0);
+  var motionState = new Ammo.btDefaultMotionState(groundTransform);
+  var rbInfo = new Ammo.btRigidBodyConstructionInfo(groundMass, motionState, groundShape, localInertia);
+  var groundAmmo = new Ammo.btRigidBody(rbInfo);
   m.scene.world.addRigidBody(groundAmmo);
 
   // create boxes
-  const sideNum = 9;
-  const startPosRange = 75;
-  const startOriRange = Math.PI;
-  const spaceRatio = 1.7;
+  var sideNum = 10;
+  var startPosRange = 75;
+  var startOriRange = Math.PI;
   m.boxes = [];
   for (x = 0; x < sideNum; x++) {
     for (y = 0; y < sideNum; y++) {
       for (z = 0; z < sideNum; z++) {
         // original box position
-        const physicsbox = new CPhysicsBox(new THREE.Vector3(
-          (x - sideNum / 2) * spaceRatio + 1,
-          y * spaceRatio + 5,
-          (z - sideNum / 2) * spaceRatio),
-          new THREE.Quaternion());
+        var physicsbox = new CPhysicsBox(new THREE.Vector3((x - sideNum / 2) * 1.5, y * 1.5 + 5, (z - sideNum / 2) * 1.5), new THREE.Quaternion());
 
         // move the box to a random position and orientation
         physicsbox.mesh.position.set(
@@ -212,9 +205,6 @@ function createScene() {
     }
   }
 
-  // keep track of smothing so we can pause the physics
-  m.sto = true;
-
   // move camera
   m.camera.position.set(0, 17, 25);
   m.camera.lookAt(new THREE.Vector3(0, 5, 0));
@@ -227,7 +217,7 @@ function createScene() {
   container.appendChild(m.stats.dom);
 
   // display some help
-  const info = document.createElement('div');
+  var info = document.createElement('div');
   info.style.position = 'absolute';
   info.style.top = '10px';
   info.style.width = '100%';
@@ -244,7 +234,7 @@ function animate(delta) {
 
   // NOT A FUNCTION? DAFUQ?!
   //
-  // for (let box in m.boxes) {
+  // for (box in m.boxes) {
   //   box.update(delta, 1.5);
   // }
 
@@ -272,7 +262,6 @@ function onDocumentKeyDown(event) {
   switch (event.keyCode) {
     // space key
     case 32:
-      m.sto = !m.sto;
       m.boxes.forEach(function(box) { box.toggleSmoothToOrigin(); });
       break;
   }
@@ -284,8 +273,8 @@ function onDocumentKeyUp(event) {
 }
 
 function onWindowResize() {
-  const canvasWidth = window.innerWidth - m.widthBorder;
-  const canvasHeight = window.innerHeight - m.heightBorder;
+  var canvasWidth = window.innerWidth - m.widthBorder;
+  var canvasHeight = window.innerHeight - m.heightBorder;
 
   m.camera.aspect = canvasWidth / canvasHeight;
   m.camera.updateProjectionMatrix();
@@ -303,7 +292,7 @@ function render() {
   requestAnimationFrame(render);
 
   m.stats.begin();
-  const delta = m.clock.getDelta();
+  var delta = m.clock.getDelta();
   animate(delta);
   m.renderer.render(m.scene, m.camera);
   m.stats.end();
